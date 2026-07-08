@@ -590,6 +590,8 @@ function resumeGame(){
       advance();
       // advance 內部會自己管理 loading 狀態
     }, 600);
+  } else {
+    updateActionAreaVisibility();
   }
 }
 
@@ -630,6 +632,8 @@ async function advance(){
     document.getElementById('loading').classList.remove('on');
     busy = false;
     setInputEnabled(true);
+    // 確保輸入欄位狀態正確
+    updateActionAreaVisibility();
   }
 }
 
@@ -681,6 +685,9 @@ function appendLatestAIResult(turnIndex) {
 
   // 只更新狀態欄，不重繪整個 feed
   updateStatusBar();
+
+  // 更新輸入欄位顯示狀態（避免消失）
+  updateActionAreaVisibility();
 }
 
 /* 只附加「你的行動」這一則（不動舊的 DOM） */
@@ -699,6 +706,9 @@ function appendPlayerAction(turnIndex) {
   editBtn.onclick = () => editTurn(turnIndex);
 
   feed.appendChild(pe);
+
+  // 玩家剛輸入後，暫時隱藏輸入欄（等 AI 回覆完再顯示）
+  updateActionAreaVisibility();
 }
 
 function sendAction(){
@@ -888,6 +898,25 @@ function updateStatusBar() {
   } else {
     if (suspEl) suspEl.textContent = st.suspicion;
     if (barEl) barEl.style.width = st.suspicion + '%';
+  }
+}
+
+/* 更新輸入欄位與遊戲結束畫面的顯示狀態 */
+function updateActionAreaVisibility() {
+  if (!S) return;
+  const lastResultIdx = (() => { let k = -1; S.turns.forEach((t, i) => { if (t.result) k = i; }); return k; })();
+  const st = computeStats(S.turns.length);
+  const over = !st.trusted && st.suspicion >= 100;
+
+  const actionArea = document.getElementById('actionArea');
+  const gameover = document.getElementById('gameover');
+
+  if (actionArea) {
+    // 只有當最新一回合已經有結果，且沒有遊戲結束時，才顯示輸入欄
+    actionArea.classList.toggle('hidden', over || lastResultIdx < 0);
+  }
+  if (gameover) {
+    gameover.classList.toggle('hidden', !over);
   }
 }
 
