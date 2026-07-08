@@ -683,6 +683,24 @@ function appendLatestAIResult(turnIndex) {
   updateStatusBar();
 }
 
+/* 只附加「你的行動」這一則（不動舊的 DOM） */
+function appendPlayerAction(turnIndex) {
+  const feed = document.getElementById('feed');
+  const turn = S.turns[turnIndex];
+  if (!turn) return;
+
+  const pe = document.createElement('div');
+  pe.className = 'entry player';
+  pe.id = 'pentry-' + turnIndex;
+  pe.innerHTML = `<div class="who"><span>你的行動</span><button>✎ 編輯重寫</button></div><div class="story"></div>`;
+  pe.querySelector('.story').textContent = turn.userText;
+
+  const editBtn = pe.querySelector('button');
+  editBtn.onclick = () => editTurn(turnIndex);
+
+  feed.appendChild(pe);
+}
+
 function sendAction(){
   if(busy) return;
   const v = document.getElementById('freeInput').value.trim();
@@ -692,7 +710,8 @@ function sendAction(){
   document.getElementById('freeInput').value='';
   S.turns.push({userText:v, result:null});
   save();
-  renderAll();
+  // 只附加「你的行動」，不重繪整個歷史
+  appendPlayerAction(S.turns.length - 1);
   advance();
 }
 
