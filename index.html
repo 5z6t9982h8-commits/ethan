@@ -796,10 +796,7 @@ function typewriter(element, fullText, speed = 8) {
     if (i < fullText.length) {
       element.textContent += fullText.charAt(i);
       i++;
-      // 自動捲到最底，感覺即時生成
-      if (i % 18 === 0) {
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-      }
+      // 已移除自動捲動，讓玩家可以自由上下滑動觀看劇情
     } else {
       clearInterval(timer);
       element.dataset.typed = 'true';
