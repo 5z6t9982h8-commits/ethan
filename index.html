@@ -619,7 +619,8 @@ async function advance(){
     const r = await callAPI();
     S.turns[S.turns.length-1].result = r;
     save();
-    renderAll();
+    // 只附加最新一頁，不重繪整個歷史（舊回覆完全不動）
+    appendLatestAIResult(S.turns.length - 1);
     // 生成成功，清除背景標記
     try { localStorage.removeItem(PENDING_KEY); } catch(e){}
   }catch(err){
@@ -630,6 +631,56 @@ async function advance(){
     busy = false;
     setInputEnabled(true);
   }
+}
+
+/* 只附加最新一頁的 AI 回覆（不動舊的 DOM 節點） */
+function appendLatestAIResult(turnIndex) {
+  const feed = document.getElementById('feed');
+  const turn = S.turns[turnIndex];
+  if (!turn || !turn.result) return;
+
+  // 計算目前已經有多少「第 X 頁」（只算 AI 劇情頁，不算「你的行動」）
+  const existingPages = feed.querySelectorAll('.entry .who span').length;
+  // 更精準：只計算包含「第」的 span
+  const aiPageCount = Array.from(feed.querySelectorAll('.entry .who span'))
+    .filter(s => s.textContent.includes('第')).length;
+  const pageNum = aiPageCount + 1;
+
+  const div = document.createElement('div');
+  div.className = 'entry';
+  div.innerHTML = `<div class="who"><span>第 ${pageNum} 頁</span><button>↻ 重寫本頁</button></div><div class="story"></div>`;
+
+  const storyEl = div.querySelector('.story');
+  const fullStory = turn.result.story || '';
+
+  // 最新頁永遠用打字機
+  typewriter(storyEl, fullStory, 7);
+
+  const regenBtn = div.querySelector('button');
+  regenBtn.onclick = regenLast;
+
+  feed.appendChild(div);
+
+  // 附加新角色卡（如果有）
+  (turn.result.newCharacters || []).forEach(c => {
+    const cc = document.createElement('div');
+    cc.className = 'charcard';
+    cc.innerHTML = `
+      <div class="cname"></div>
+      <div class="cline"><b>年齡</b><span class="c1"></span></div>
+      <div class="cline"><b>身分</b><span class="c2"></span></div>
+      <div class="cline"><b>外貌</b><span class="c3"></span></div>
+      <div class="cline"><b>其他</b><span class="c4"></span></div>`;
+    cc.querySelector('.cname').textContent = c.name || '？';
+    cc.querySelector('.c1').textContent = c.age || '不明';
+    cc.querySelector('.c2').textContent = c.identity || '不明';
+    cc.querySelector('.c3').textContent = c.appearance || '—';
+    cc.querySelector('.c4').textContent = c.notes || '—';
+    feed.appendChild(cc);
+  });
+
+  // 只更新狀態欄，不重繪整個 feed
+  updateStatusBar();
 }
 
 function sendAction(){
@@ -747,26 +798,15 @@ function renderAll(){
   });
 
   // 狀態欄
-  const st = computeStats(S.turns.length);
-  const lastR = lastResultIdx>=0 ? S.turns[lastResultIdx].result : null;
-  document.getElementById('stMood').textContent = (lastR&&lastR.mood)||'—';
-  const fc = (lastR && typeof lastR.favorChange==='number' && lastR.favorChange!==0)
-    ? (lastR.favorChange>0?`（+${lastR.favorChange}）`:`（${lastR.favorChange}）`) : '';
-  document.getElementById('stFavor').innerHTML = st.favor+`<span class="delta">${fc}</span>`;
-  if(st.trusted){
-    document.getElementById('stSuspicion').textContent='—';
-    document.getElementById('suspBar').style.width='0%';
-  }else{
-    document.getElementById('stSuspicion').textContent = st.suspicion;
-    document.getElementById('suspBar').style.width = st.suspicion+'%';
-  }
+  updateStatusBar();
 
   // 遊戲結束
   const over = !st.trusted && st.suspicion>=100;
   document.getElementById('gameover').classList.toggle('hidden', !over);
   document.getElementById('actionArea').classList.toggle('hidden', over || lastResultIdx<0);
 
-  window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+  // 只有在非打字機流程時才自動捲到底（避免干擾玩家滑動）
+  // window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
 }
 
 function setInputEnabled(on){
@@ -802,6 +842,34 @@ function typewriter(element, fullText, speed = 8) {
       element.dataset.typed = 'true';
     }
   }, speed);
+}
+
+/* 只更新右上角狀態欄（心情、好感、懷疑） */
+function updateStatusBar() {
+  if (!S) return;
+  const st = computeStats(S.turns.length);
+  const lastResultIdx = (() => { let k = -1; S.turns.forEach((t, i) => { if (t.result) k = i; }); return k; })();
+  const lastR = lastResultIdx >= 0 ? S.turns[lastResultIdx].result : null;
+
+  const moodEl = document.getElementById('stMood');
+  if (moodEl) moodEl.textContent = (lastR && lastR.mood) || '—';
+
+  const favorEl = document.getElementById('stFavor');
+  if (favorEl) {
+    const fc = (lastR && typeof lastR.favorChange === 'number' && lastR.favorChange !== 0)
+      ? (lastR.favorChange > 0 ? `（+${lastR.favorChange}）` : `（${lastR.favorChange}）`) : '';
+    favorEl.innerHTML = st.favor + `<span class="delta">${fc}</span>`;
+  }
+
+  const suspEl = document.getElementById('stSuspicion');
+  const barEl = document.getElementById('suspBar');
+  if (st.trusted) {
+    if (suspEl) suspEl.textContent = '—';
+    if (barEl) barEl.style.width = '0%';
+  } else {
+    if (suspEl) suspEl.textContent = st.suspicion;
+    if (barEl) barEl.style.width = st.suspicion + '%';
+  }
 }
 
 /* ================= 初始化 ================= */
